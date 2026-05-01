@@ -135,9 +135,101 @@ Key CSS classes to reuse:
 | `.cs-photo-preview` | Full-width photo container |
 | `.cs-crit-name` / `.cs-cap` / `.cs-val` | Criterion label / caption / value text |
 
+## Italian localisation & legal context
+
+This app targets the Italian residential real estate market. Every feature must be consistent with Italian language conventions, number formats, and the regulatory framework that governs Italian property transactions.
+
+### Language — non-negotiable rules
+
+- **Every user-facing string must be in Italian.** This includes labels, button text, error messages, tooltips, empty-state copy, and toast notifications. Never write UI text in English.
+- **Domain vocabulary is fixed.** Use the Italian terms below exactly — do not substitute English synonyms, even in comments that end up in rendered text:
+
+| Italian term | Meaning |
+|---|---|
+| `immobile` | property / real-estate unit |
+| `scheda` | property record / data sheet |
+| `criterio` / `criteri` | scoring criterion / criteria |
+| `valutazione` | evaluation / scoring session |
+| `voto` | score / rating (1–5 per criterion) |
+| `peso` | weight (multiplier applied to a voto) |
+| `punteggio` | computed weighted score |
+| `prezzo` | asking price |
+| `mq` | square metres (metri quadri) |
+| `locali` | number of rooms |
+| `piano` | floor |
+| `ascensore` | lift / elevator |
+| `posto auto` | parking space |
+| `giardino` | garden / outdoor area |
+| `spese condominiali` | condominium maintenance fees |
+| `classe energetica` | energy performance class |
+| `mutuo` | mortgage |
+| `rata` | monthly instalment |
+| `anticipo` | down payment |
+| `tasso` | interest rate |
+| `indirizzo` | address |
+| `note` | free-text notes |
+| `stato` | property status in the workflow |
+
+- **Status labels** (`da visitare`, `visitato`, `preferito`, `scartato`) are defined in `db.STATUSES` and rendered via `formatters.status_label`. Never hard-code them in components.
+
+### Number and currency formatting
+
+Italian convention differs from the C/US locale: **periods are thousands separators and commas are decimal separators** (e.g. `€ 1.234.567,00`). The app displays only integer euro amounts, so commas never appear in practice, but be careful with any future decimal currency display.
+
+- Always use `formatters.fmt_eur(v)` for euro amounts — it produces `"€ 1.234.567"`.
+- Always use `formatters.fmt_int(v, suffix)` for unit quantities (mq, locali, anni).
+- Never use Python's default `f"{n:,}"` (produces `1,234,567`) — replace commas with periods: `f"{n:,}".replace(",", ".")`.
+- The em dash `"—"` is the canonical placeholder for missing/null values. Use it consistently.
+
+### Energy performance class (classe energetica)
+
+The `classe_energetica` field stores an Italian energy class label. The valid values — `A4 A3 A2 A1 A B C D E F G` — follow the **national energy classification scale** defined by the *Decreto Ministeriale 26 giugno 2015 "Linee guida nazionali per la certificazione energetica degli edifici"*, issued under *D.Lgs. 192/2005* (transposing EU Directive 2010/31/EU on the energy performance of buildings).
+
+Key implications for the codebase:
+- `ENERGY_CLASSES` in `scheda.py` must always be ordered best → worst: `["A4","A3","A2","A1","A","B","C","D","E","F","G"]`. Do not reorder.
+- An APE (*Attestato di Prestazione Energetica*) is legally mandatory for any property sale or rental in Italy. If the app ever displays or validates APE data it must respect this ordering.
+- Adding a new class requires checking whether Italian law has introduced it — do not invent classes.
+
+### Condominium fees (spese condominiali)
+
+`spese_cond` stores the monthly condominium fee in euros. These fees are governed by **artt. 1117–1139 del Codice Civile** and the *Legge 220/2012* (riforma del condominio). Key facts for any feature work:
+
+- Fees are due monthly and split between ordinary and extraordinary maintenance. The app stores a single combined figure — a reasonable simplification for a scoring tool.
+- If the app ever distinguishes ordinary (`ordinarie`) vs extraordinary (`straordinarie`) fees, the terms must match Italian condominium law usage exactly.
+- The unit is always `€/mese` (euros per month) — display it that way.
+
+### Mortgage calculator (mutuo)
+
+`calc_rata` in `mutuo.py` implements **ammortamento alla francese** (French / constant-instalment amortization), which is the standard mortgage structure used by Italian banks.
+
+The three parameters map to regulated concepts:
+
+| Field | Italian term | Notes |
+|---|---|---|
+| `mutuo_anticipo` | anticipo / acconto | Down payment as a percentage of purchase price. Italian banks typically cap LTV at 80% (Banca d'Italia *Circolare 285/2013*, Parte Prima, Tit. IV, Cap. 3), meaning the minimum anticipo is 20%. The slider is capped at 80% (maximum anticipo) accordingly. |
+| `mutuo_tasso` | TAN | *Tasso Annuo Nominale* — the nominal annual rate. This is **not** the TAEG (*Tasso Annuo Effettivo Globale*), which includes fees and charges. If the app ever adds a TAEG field, label it explicitly. |
+| `mutuo_anni` | durata | Loan term in years. Italian residential mortgages typically run 5–30 years; the slider allows up to 40 for flexibility. |
+
+When displaying mortgage results, use the Italian terms: `rata mensile`, `capitale finanziato`, `anticipo`, `interessi totali`. Do not use English equivalents.
+
+### Property status workflow
+
+The four statuses in `db.STATUSES` model a typical Italian buyer's decision funnel:
+
+| ID | Italian label | Meaning |
+|---|---|---|
+| `visit` | Da visitare | Shortlisted — visit not yet scheduled |
+| `visited` | Visitato | Visit completed, still under evaluation |
+| `favorite` | Preferito | Serious candidate |
+| `rejected` | Scartato | Ruled out |
+
+Status IDs are English slugs for code clarity, but the user never sees them — they always see the Italian label. Keep this separation intact.
+
+---
+
 ## Conventions worth knowing
 
-- **Domain language is Italian.** All field names, labels, and user-facing strings use Italian vocabulary (`immobile`, `criterio`, `valutazione`, `prezzo`, `mq`, `locali`, `mutuo`, `rata`, `anticipo`). Never introduce English domain terms.
+- **Domain language is Italian — see the localisation section above.** Every new label, message, field name, and piece of copy must be Italian. When in doubt, refer to the vocabulary table there.
 - **Widget keys are namespaced by `immobile_id`** (e.g. `f"voto_{immobile['id']}_{criterio}"`). This prevents state collisions when multiple properties appear on the same page. Always follow this pattern for new per-property widgets.
 - **Navigation uses `st.switch_page`**, not `st.rerun()`. To navigate programmatically: `st.switch_page(st.session_state["pages"]["<key>"])`.
 - **CSS lives in `assets/styles.css`, not in Python.** New components must reuse existing `.cs-*` classes. Do not add inline styles for layout or theming — extend the CSS file if a new class is genuinely needed.
