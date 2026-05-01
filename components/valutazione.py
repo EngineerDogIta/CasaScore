@@ -1,4 +1,8 @@
-"""Valutazione widget — per-criterion 1–5 sliders with live weighted score."""
+"""Valutazione widget — per-criterion 1–5 sliders with live weighted score.
+
+Wrapped in `@st.fragment` so slider drags only re-run this block, not the
+whole page. Writes are debounced by diffing against the last-saved state.
+"""
 from __future__ import annotations
 
 import streamlit as st
@@ -6,14 +10,15 @@ import streamlit as st
 import db
 
 
+@st.fragment
 def render(immobile: dict) -> None:
-    valutazioni = [dict(v) for v in db.get_valutazioni(immobile["id"])]
+    valutazioni = db.get_valutazioni(immobile["id"])
     if not valutazioni:
-        # Backfill if criteria were added after the property
+        # Backfill if criteria were added after the property was created
         for c in db.list_criteri():
             db.upsert_valutazione(immobile["id"], c["nome"],
                                   c["peso_default"], 0)
-        valutazioni = [dict(v) for v in db.get_valutazioni(immobile["id"])]
+        valutazioni = db.get_valutazioni(immobile["id"])
 
     st.markdown('<div class="cs-section-title">Valutazione</div>',
                 unsafe_allow_html=True)
@@ -45,10 +50,17 @@ def render(immobile: dict) -> None:
             )
         updated.append({"criterio": v["criterio"], "peso": peso, "voto": voto})
 
-    db.bulk_upsert_valutazioni(immobile["id"], updated)
+    # Persist only the rows that actually changed — avoids a pointless
+    # write (and cache invalidation) on every fragment re-run.
+    changed = [
+        u for u, v in zip(updated, valutazioni)
+        if int(u["voto"]) != int(v["voto"])
+        or abs(float(u["peso"]) - float(v["peso"])) > 1e-6
+    ]
+    if changed:
+        db.bulk_upsert_valutazioni(immobile["id"], changed)
 
-    score = db.weighted_score(updated)
-    _render_score(score)
+    _render_score(db.weighted_score(updated))
 
 
 def _render_score(score: float | None) -> None:

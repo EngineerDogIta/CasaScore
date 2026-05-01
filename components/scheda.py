@@ -143,7 +143,7 @@ def render(immobile_id: int | None = None) -> None:
         }
         if is_edit:
             db.update_immobile(immobile_id, payload)
-            st.success("Scheda aggiornata.")
+            st.toast("Scheda aggiornata.", icon="✅")
         else:
             new_id = db.insert_immobile({
                 **payload,
@@ -152,6 +152,5 @@ def render(immobile_id: int | None = None) -> None:
                 "mutuo_tasso": data["mutuo_tasso"],
             })
             st.session_state["selected_id"] = new_id
-            st.success(f"Scheda creata. Ora puoi valutarla.")
-        st.session_state["page"] = "Immobili"
-        st.rerun()
+            st.toast("Scheda creata. Ora puoi valutarla.", icon="✅")
+        st.switch_page(st.session_state["pages"]["immobili"])

@@ -1,9 +1,15 @@
-"""Mortgage calculator widget — French amortization."""
+"""Mortgage calculator widget — French amortization.
+
+`calc_rata` is pure and reused by the standalone Calcolatore page.
+The inline `render` is wrapped in `@st.fragment` so the sliders only
+re-run this block and only persist when a slider actually changed.
+"""
 from __future__ import annotations
 
 import streamlit as st
 
 import db
+from formatters import fmt_eur, metric_card
 
 
 def calc_rata(prezzo: float, anticipo_pct: float, anni: int, tasso_pct: float) -> dict:
@@ -30,8 +36,9 @@ def calc_rata(prezzo: float, anticipo_pct: float, anni: int, tasso_pct: float) -
     }
 
 
+@st.fragment
 def render(immobile: dict, *, key_prefix: str = "mutuo") -> None:
-    """Inline mortgage block. Persists slider values back to the DB."""
+    """Inline mortgage block. Persists slider values back to the DB on change."""
     prezzo = immobile.get("prezzo") or 0
 
     st.markdown('<div class="cs-section-title">Calcolatore mutuo</div>',
@@ -59,26 +66,25 @@ def render(immobile: dict, *, key_prefix: str = "mutuo") -> None:
 
     res = calc_rata(prezzo, anticipo, anni, tasso)
 
-    db.update_immobile(immobile["id"], {
-        "mutuo_anticipo": anticipo, "mutuo_anni": anni, "mutuo_tasso": tasso,
-    })
+    # Only write when something actually changed — keeps the read cache warm.
+    prev_anticipo = int(immobile.get("mutuo_anticipo") or 20)
+    prev_anni = int(immobile.get("mutuo_anni") or 25)
+    prev_tasso = float(immobile.get("mutuo_tasso") or 3.5)
+    if (anticipo != prev_anticipo
+            or anni != prev_anni
+            or abs(tasso - prev_tasso) > 1e-6):
+        db.update_immobile(immobile["id"], {
+            "mutuo_anticipo": anticipo,
+            "mutuo_anni": anni,
+            "mutuo_tasso": tasso,
+        })
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.markdown(_metric("Rata mensile", f"€ {res['rata']:,.0f}", accent=True),
+    m1.markdown(metric_card("Rata mensile", fmt_eur(res["rata"]), accent=True),
                 unsafe_allow_html=True)
-    m2.markdown(_metric("Capitale", f"€ {res['capitale']:,.0f}"),
+    m2.markdown(metric_card("Capitale", fmt_eur(res["capitale"])),
                 unsafe_allow_html=True)
-    m3.markdown(_metric("Anticipo", f"€ {res['anticipo']:,.0f}"),
+    m3.markdown(metric_card("Anticipo", fmt_eur(res["anticipo"])),
                 unsafe_allow_html=True)
-    m4.markdown(_metric("Interessi totali", f"€ {res['interessi']:,.0f}"),
+    m4.markdown(metric_card("Interessi totali", fmt_eur(res["interessi"])),
                 unsafe_allow_html=True)
-
-
-def _metric(label: str, value: str, *, accent: bool = False) -> str:
-    color = "var(--sage-deep)" if accent else "var(--ink)"
-    return f"""
-    <div class="cs-metric">
-      <div class="cs-metric-label">{label}</div>
-      <div class="cs-metric-value" style="color:{color}">{value}</div>
-    </div>
-    """
