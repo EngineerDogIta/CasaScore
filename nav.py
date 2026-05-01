@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from components import calcolatore, dashboard, immobili, impostazioni, scheda
+from components import calcolatore, dashboard, immobili, impostazioni, rubrica, scheda
 
 
 def _scheda_page() -> None:
@@ -33,6 +33,10 @@ def build() -> dict:
         "calcolatore": st.Page(
             calcolatore.render, title="Calcolatore",
             url_path="calcolatore",
+        ),
+        "rubrica": st.Page(
+            rubrica.render, title="Rubrica",
+            url_path="rubrica",
         ),
         "impostazioni": st.Page(
             impostazioni.render, title="Impostazioni",

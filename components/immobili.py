@@ -26,6 +26,7 @@ def render() -> None:
     _render_photo(current)
     _render_facts(current)
     _render_extras(current)
+    _render_agente(current)
     _render_notes(current)
 
     valutazione.render(current)
@@ -96,15 +97,33 @@ def _render_facts(current: dict) -> None:
         fmt_eur(int(current["prezzo"] / current["mq"]))
         if current["prezzo"] and current["mq"] else "—"
     )
+    risc_parts = [
+        current.get("riscaldamento_tipo"),
+        current.get("riscaldamento_alimentazione"),
+        current.get("riscaldamento_diffusione"),
+    ]
+    riscaldamento = ", ".join(p for p in risc_parts if p) or "—"
     facts = [
         ("Prezzo", fmt_eur(current["prezzo"])),
         ("Superficie", fmt_int(current["mq"], " mq")),
         ("€/mq", eur_mq),
         ("Locali", str(current["locali"] or "—")),
+        ("Camere", str(current.get("camere") or "—")),
+        ("Bagni", str(current.get("bagni") or "—")),
         ("Piano", current["piano"] or "—"),
+        ("Piani edificio", str(current.get("piani_edificio") or "—")),
+        ("Tipologia", current.get("tipologia") or "—"),
+        ("Contratto", current.get("contratto") or "—"),
+        ("Stato immobile", current.get("stato_immobile") or "—"),
+        ("Disponibilità", current.get("disponibilita") or "—"),
+        ("Arredato", current.get("arredato") or "—"),
+        ("Cucina", current.get("cucina") or "—"),
+        ("Esposizione", current.get("esposizione") or "—"),
         ("Anno", str(current["anno"] or "—")),
         ("Classe en.", current["classe_energetica"] or "—"),
         ("Spese cond.", f"{fmt_eur(current['spese_cond'])}/mese"),
+        ("Riscaldamento", riscaldamento),
+        ("Climatizzazione", current.get("climatizzazione") or "—"),
     ]
     rows = st.columns(4)
     for i, (k, v) in enumerate(facts):
@@ -112,13 +131,25 @@ def _render_facts(current: dict) -> None:
 
 
 def _render_extras(current: dict) -> None:
-    extras = []
-    if current["ascensore"]:
+    extras: list[str] = []
+    if current.get("ascensore"):
         extras.append("Ascensore")
-    if current["posto_auto"]:
-        extras.append("Posto auto")
-    if current["giardino"] and current["giardino"] != "Nessuno":
-        extras.append(current["giardino"])
+    if current.get("posto_auto"):
+        desc = current.get("posto_auto_desc")
+        extras.append(f"Posto auto: {desc}" if desc else "Posto auto")
+    if current.get("balcone"):
+        extras.append("Balcone")
+    if current.get("terrazzo"):
+        extras.append("Terrazzo")
+    if current.get("cantina"):
+        extras.append("Cantina")
+    if current.get("accesso_disabili"):
+        extras.append("Accesso disabili")
+    giardino_tipo = current.get("giardino_tipo")
+    if giardino_tipo and giardino_tipo != "Nessuno":
+        extras.append(f"Giardino {giardino_tipo.lower()}")
+    altre = current.get("altre_caratteristiche") or ""
+    extras.extend(x for x in altre.split(";") if x)
     if not extras:
         return
     pills = "".join(
@@ -131,6 +162,54 @@ def _render_extras(current: dict) -> None:
         f"{pills}</div>",
         unsafe_allow_html=True,
     )
+
+
+def _render_agente(current: dict) -> None:
+    if not current.get("contatto_id"):
+        return
+    contatto = db.get_contatto(current["contatto_id"])
+    if not contatto:
+        return
+    agenzia = (db.get_agenzia(contatto["agenzia_id"])
+               if contatto.get("agenzia_id") else None)
+
+    from html import escape
+    rows = [f'<div class="cs-card-label">{escape(contatto["nome"])}</div>']
+    if contatto.get("ruolo"):
+        rows.append(
+            f'<div class="cs-card-addr">{escape(contatto["ruolo"])}</div>'
+        )
+    line: list[str] = []
+    if contatto.get("telefono"):
+        line.append(f"📞 {escape(contatto['telefono'])}")
+    if contatto.get("email"):
+        line.append(f"✉️ {escape(contatto['email'])}")
+    if line:
+        rows.append(
+            f'<div style="margin-top:.5rem;color:var(--ink-soft);'
+            f'font-size:.9rem">{"  ·  ".join(line)}</div>'
+        )
+    if agenzia:
+        ag_line = [f"<strong>{escape(agenzia['nome'])}</strong>"]
+        if agenzia.get("telefono"):
+            ag_line.append(f"📞 {escape(agenzia['telefono'])}")
+        if agenzia.get("indirizzo"):
+            ag_line.append(f"📍 {escape(agenzia['indirizzo'])}")
+        rows.append(
+            f'<div style="margin-top:.6rem;padding-top:.6rem;'
+            f'border-top:1px solid var(--line);font-size:.88rem;'
+            f'color:var(--ink-soft)">{"  ·  ".join(ag_line)}</div>'
+        )
+
+    st.markdown('<div class="cs-section-title">Agente</div>',
+                unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="cs-card"><div class="cs-card-body">{"".join(rows)}'
+        f'</div></div>',
+        unsafe_allow_html=True,
+    )
+    if st.button("Vedi in Rubrica", key=f"detail_rubrica_{current['id']}"):
+        st.switch_page(st.session_state["pages"]["rubrica"])
 
 
 def _render_notes(current: dict) -> None:
