@@ -60,7 +60,6 @@ selected = st.navigation(list(st.session_state["pages"].values()))
 
 
 # =============================================================== sidebar 2 ===
-# Custom controls below the auto-generated nav widget.
 
 with st.sidebar:
     immobili_list = db.list_immobili()

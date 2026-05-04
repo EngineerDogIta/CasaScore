@@ -16,7 +16,7 @@ def _scheda_page() -> None:
     scheda.render(st.session_state.get("edit_id"))
 
 
-def build() -> dict:
+def build() -> dict[str, st.Page]:
     return {
         "dashboard": st.Page(
             dashboard.render, title="Dashboard",
